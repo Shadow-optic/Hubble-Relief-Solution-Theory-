@@ -133,8 +133,10 @@ def fold_stability_score(
     beta  : sharpness of transition (1 = gradual, >1 = switch-like)
     s_max : peak fold-stability deviation (default 0.410, from det ratio)
     """
-    if t <= 0:
-        return s_max
+    if t < 0:
+        return s_max  # before intervention / onset, score is at peak
+    if t == 0:
+        return s_max  # at onset, (t/τ)^β = 0 so f(0) = 1
     f_t = 1.0 / (1.0 + (t / tau) ** beta)
     return s_max * f_t
 
@@ -300,7 +302,9 @@ def optimal_dosing_window(
     correction is cosmologically significant.
     """
     if efficacy_threshold <= 0 or efficacy_threshold >= 1.0:
-        return float("inf")
+        raise ValueError(
+            f"efficacy_threshold must be in (0, 1), got {efficacy_threshold}"
+        )
     return tau * ((1.0 / efficacy_threshold - 1.0) ** (1.0 / beta))
 
 
@@ -390,6 +394,7 @@ def alzheimer_biomarker_model(
         s_t = fold_stability_score(t, tau, beta)
         xi_drug = drug_binding_coefficient(gamma_drug)
         treated_level = amyloid_baseline * (1.0 - 0.5 * xi_drug * s_t)
+        # Biomarker levels cannot be negative; floor at zero.
         treated_level = max(treated_level, 0.0)
 
         # Without treatment: pathological accumulation
